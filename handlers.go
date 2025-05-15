@@ -4,7 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"github.com/golang-jwt/jwt/v5"
+	"time"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -44,7 +44,33 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 
-	jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		""
-	})
+	var dbPasswordHash string
+
+	err := dbpool.QueryRow(r.Context(), "SELECT password FROM users WHERE username = $1", username).Scan(&dbPasswordHash)
+	if err != nil {
+		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
+		return
+	}
+	err = bcrypt.CompareHashAndPassword([]byte(dbPasswordHash), []byte(password))
+	if err != nil {
+		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
+		return
+	}
+
+	sessionCookie := http.Cookie{
+		Name: "session-id",
+		Value: "permission granted",
+		Expires: time.Now().Add(time.Hour * 24),
+		HttpOnly: true,
+		Secure: false,
+		SameSite: http.SameSiteDefaultMode,
+		Path: "/",
+	}
+	http.SetCookie(w, &sessionCookie)
+
+	http.Redirect(w, r, "user-page", http.StatusFound)
+}
+
+func userPageHandler(w http.ResponseWriter, r *http.Request) {
+	
 }
